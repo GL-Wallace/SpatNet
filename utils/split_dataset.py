@@ -11,9 +11,9 @@ from PIL import Image
 if __name__ == '__main__':
     split_rate = 0.2  # 0.8:0.2
     resize_image = 224  # 图片缩放后统一大小
-    file_path = 'E:\SpatNet\datasets\\flower_photos'  # 获取原始数据集路径
-    train_dir = 'E:\SpatNet\datasets\\train'
-    test_dir = 'E:\SpatNet\datasets\\test'
+    file_path = 'E:\Papers\dataset_spatNet\\flower_photos'  # 获取原始数据集路径
+    train_dir = 'E:\Papers\dataset_spatNet\\train'
+    test_dir = 'E:\Papers\dataset_spatNet\\test'
     # 找到文件中所有文件夹的目录，即类文件夹名
     dirs = glob.glob(os.path.join(file_path, '*'))
     dirs = [d for d in dirs if os.path.isdir(d)]
