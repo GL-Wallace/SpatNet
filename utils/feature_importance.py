@@ -1,3 +1,11 @@
+# -----------------------------------------------------------------------------
+# Copyright (c) 2025, Guowei Zhang
+# All rights reserved.
+# 
+# This source code is licensed under the MIT License found in the LICENSE file
+# in the root directory of this source tree.
+# -----------------------------------------------------------------------------
+
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.datasets import load_iris
 import pandas as pd
