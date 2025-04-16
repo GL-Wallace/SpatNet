@@ -13,9 +13,10 @@ from models.layers.cam import ChannelAttention
 
 
 class TempoNet(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers=2, dropout=0.1):
+    def __init__(self, input_size, hidden_size, num_layers=2, dropout=0.1, is_submodel=False):
         super(TempoNet, self).__init__()
         self.num_heads = 8
+        self.is_submodel = is_submodel
         
         self.bigru = nn.GRU(
             input_size=input_size,
@@ -52,18 +53,16 @@ class TempoNet(nn.Module):
             query=gru_out, 
             key=gru_out, 
             value=gru_out, 
-            need_weights=False  # 不返回注意力权重矩阵
+            need_weights=False 
         )
 
-        
-
         out = self.channel_attention(attn_output)
-
-        # out = attn_output.mean(1) # []
-        # print("mean:", out.shape)
-        out = self.final_proj(out[:,-1,:]).squeeze(-1)
-        # print("final:", out.shape, out)
-
+        print(f"channel_attention: {out.shape}")
         
-        return out[:,]
+        if self.is_submodel:
+            print("Tempo Out Shape:", out.shape)
+        else:
+            out = self.final_proj(out[:,-1,:]).squeeze(-1)
+
+        return out
 

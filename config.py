@@ -8,24 +8,27 @@
 
 # coding=utf-8
 import os
-import pickle
 
 # model hyper-parameters
 device = 'cuda'  # 'cpu' or 'cuda'
 rand_seed = 188
 
 # ['SpaNet', 'TempoNet', 'SpatNet',]
-model_name = 'TempoNet'  
+model_name = 'SpatNet'  
 
 # hyper-parameter of SpaNet
-# num_channels = 10
-num_channels = 1 
+num_channels = 1
 
-# hyper-parameter of TempoNet (small values for parameters for initializing the model training)
+# hyper-parameter of TempoNet
 tempo_input_size = 70          # feature_size of time series
-tempo_hidden_size = 32         # hidden size and layers do not need to be large
+tempo_hidden_size = 64         # hidden size and layers do not need to be large
 tempo_num_layers = 2
 tempo_dropout = 0.2
+
+# hyper-parameter of Cross Attender
+num_heads = 4
+hidden_dim =128
+
 
 # hyper-parameter for training
 lr = 0.1
@@ -39,7 +42,7 @@ data_dir = './data/'
 log_dir = './log/'
 f_df_samples = os.path.join(data_dir, 'sample_values.csv')   # user need to assign the filename of the sample data (including columns of the target soil property, e.g. soil organic carbon values)
 target_var_name = 'SOM'     # the column name for the target property (y) that needs to be predicted
-f_data_spa = os.path.join(data_dir, 's2_3yr_7m.pkl')
+f_data_spa = os.path.join(data_dir, 'spa_data.pkl')
 f_data_tempo = os.path.join(data_dir, 's2_3yr_7m.pkl')               # the pickle file of the input data (X) for LSTM (i.e. phenological data with temporally dynamic information)
 
 train_test_id = 1

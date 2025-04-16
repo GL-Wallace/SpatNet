@@ -12,9 +12,9 @@ from torch import nn
 from typing import Optional
 import torch.nn.functional as F
 
-class GroupQueryAttention(nn.Module):
+class crossAttender(nn.Module):
     def __init__(self, embed_dim, num_heads, nums_key_value_head, dropout=0.0):
-        super(GroupQueryAttention, self).__init__()
+        super(crossAttender, self).__init__()
         assert embed_dim % num_heads == 0, "Embedding dimension must be divisible by number of heads"
         assert num_heads % nums_key_value_head == 0, "nums_key_value_head must be devided by number of heads"
         self.embed_dim = embed_dim
@@ -22,6 +22,7 @@ class GroupQueryAttention(nn.Module):
         self.nums_key_value_head = num_heads // 2
         self.head_dim = embed_dim // num_heads
         self.ln = torch.nn.LayerNorm(embed_dim)
+        print(f"embed_dim:{embed_dim}, num_heads: {self.num_heads}, out: {self.num_heads * self.head_dim}")
         self.q_proj = nn.Linear(embed_dim, self.num_heads * self.head_dim)
         self.k_proj = nn.Linear(embed_dim, nums_key_value_head * self.head_dim)
         self.v_proj = nn.Linear(embed_dim, nums_key_value_head * self.head_dim)

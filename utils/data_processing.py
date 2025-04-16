@@ -166,7 +166,9 @@ def s2_gee_samples():
     with open(formated_csv_save_path, 'w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(headers)  
-        writer.writerows(rows) 
+        # sorted_rows = sorted(rows, key=lambda row: int(row['som']))
+        sorted_rows = sorted(rows, key=lambda column:column[1])
+        writer.writerows(sorted_rows) 
             
     print("formating the S2 date finished.")
 
@@ -174,8 +176,27 @@ def s2_gee_samples():
     print("DONE")
 
 
+def spatial_properities():
+    file_loc = '/mnt/e/Papers/SpatNet/data/spa_data.csv'
+    df = pd.read_csv(file_loc)
+    df = df.iloc[:,1:].reset_index(drop=True)
+    print(df.head())
+    data = df.to_numpy()
+
+    reshaped_data = data.reshape(582, 14, 1)
+
+    print(reshaped_data.shape)
+    output_name = f'spa_data.pkl'
+    output_path = os.path.join(output_dir, output_name)
+    with open(output_path, 'wb') as f:
+        pickle.dump(reshaped_data, f)
+    print(f"Saved: {output_path}")
+
+
+
 
 if __name__ == '__main__':
     # k_folds_valid(sample_num=582, k=5)
-    s2_gee_samples()
+    # s2_gee_samples()
+    spatial_properities()
     

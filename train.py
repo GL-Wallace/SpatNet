@@ -11,15 +11,14 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from torch.autograd import Variable
-import torchvision.transforms as transforms
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from sklearn import metrics
 from models.tempo_net import TempoNet
-from models.gru_fpn import BiGRU_FPN
+from models.spa_net import SpaNet
+from models.spat_net import SpatNet
 import config as cfg
 from utils import utils 
 from utils import data_helper
@@ -32,16 +31,23 @@ def get_data_loader(x_data, y_data, train_idx, test_idx):
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=False)
     return train_loader, test_loader
 
+def get_data_loader_spat(x_data_spa, x_data_tempo, y_data, train_idx, test_idx):
+    train_dataset = data_helper.DatasetSPAT(x_data_spa=x_data_spa, x_data_tempo=x_data_tempo, y_data=y_data, data_index=train_idx, transform=None, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True)
+    test_dataset = data_helper.DatasetSPAT(x_data_spa=x_data_spa, x_data_tempo=x_data_tempo, y_data=y_data, data_index=test_idx, transform=None, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=cfg.batch_size, shuffle=False)
+    return train_loader, test_loader
 
 def get_model_and_dataloader(x_spa, x_tempo, y, train_idx, test_idx):
     if cfg.model_name == 'SpaNet':
-        model = models.ConvNet(num_channels=cfg.num_channels)
-        train_loader, test_loader = get_data_loader(x_data=x_cnn_common, y_data=y, train_idx=train_idx, test_idx=test_idx)
+        model = SpaNet(in_channels=cfg.num_channels)
+        train_loader, test_loader = get_data_loader(x_data=x_spa, y_data=y, train_idx=train_idx, test_idx=test_idx)
     elif cfg.model_name == 'TempoNet':
-        # model = BiGRU_FPN(input_dim=cfg.tempo_input_size, out_dim=cfg.tempo_hidden_size, num_layers=cfg.tempo_num_layers, dropout=cfg.tempo_dropout)
-        model = BiGRU_FPN(input_size=cfg.tempo_input_size, hidden_size=cfg.tempo_hidden_size, num_layers=cfg.tempo_num_layers, dropout=cfg.tempo_dropout)
-        # input_size, hidden_size, num_layers=2, dropout=0.1
+        model = TempoNet(input_size=cfg.tempo_input_size, hidden_size=cfg.tempo_hidden_size, num_layers=cfg.tempo_num_layers, dropout=cfg.tempo_dropout)
         train_loader, test_loader = get_data_loader(x_data=x_tempo, y_data=y, train_idx=train_idx, test_idx=test_idx)
+    elif cfg.model_name == 'SpatNet':
+        model = SpatNet(input_dim_spa = cfg.num_channels, input_dim_tempo=cfg.tempo_input_size, hidden_dim=cfg.hidden_dim, output_dim=1, num_heads=cfg.num_heads)
+        train_loader, test_loader = get_data_loader_spat(x_data_spa=x_spa,x_data_tempo=x_tempo, y_data=y, train_idx=train_idx, test_idx=test_idx)
     else:
         print('Model name is not valid.')
         sys.exit(0)
