@@ -53,6 +53,17 @@ def get_model_and_dataloader(x_spa, x_tempo, y, train_idx, test_idx):
         sys.exit(0)
     return model, train_loader, test_loader
 
+def process_input(data_input):
+    device = cfg.device
+    if len(data_input) >= 3:
+        x_input_cnn = data_input[0].to(device)
+        x_input_lstm = data_input[1].to(device)
+        y_input = data_input[2].to(device)
+        return (x_input_cnn, x_input_lstm), y_input
+    else:
+        x_input = data_input[0].to(device)
+        y_input = data_input[1].to(device)
+        return (x_input,), y_input
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
@@ -62,251 +73,121 @@ def init_weights(m):
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
 
-def plot_training_metrics(train_losses, eval_losses, 
-                         train_rmses, eval_rmses,
-                         train_maes, eval_maes,
-                         train_r2s, eval_r2s,lrs,
-                         save_path='./log/training_metrics.png'):
-    """
-    绘制训练和评估指标曲线
-    
-    参数:
-        train_losses: 训练损失列表
-        eval_losses: 评估损失列表
-        train_rmses: 训练RMSE列表
-        eval_rmses: 评估RMSE列表
-        train_maes: 训练MAE列表
-        eval_maes: 评估MAE列表
-        train_r2s: 训练R2列表
-        eval_r2s: 评估R2列表
-        save_path: 图片保存路径
-    """
-    plt.figure(figsize=(18, 8))
-    
-    # 损失曲线
-    plt.subplot(3, 2, 1)
-    plt.plot(train_losses, label='Train Loss')
-    plt.plot(eval_losses, label='Eval Loss')
-    plt.title('Training and Evaluation Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    
-    # RMSE曲线
-    plt.subplot(3, 2, 2)
-    plt.plot(train_rmses, label='Train RMSE')
-    plt.plot(eval_rmses, label='Eval RMSE')
-    plt.title('RMSE')
-    plt.xlabel('Epoch')
-    plt.ylabel('RMSE')
-    plt.legend()
-    
-    # MAE曲线
-    plt.subplot(3, 2, 3)
-    plt.plot(train_maes, label='Train MAE')
-    plt.plot(eval_maes, label='Eval MAE')
-    plt.title('MAE')
-    plt.xlabel('Epoch')
-    plt.ylabel('MAE')
-    plt.legend()
-    
-    # R2曲线
-    plt.subplot(3, 2, 4)
-    plt.plot(train_r2s, label='Train R2')
-    plt.plot(eval_r2s, label='Eval R2')
-    plt.title('R2 Score')
-    plt.xlabel('Epoch')
-    plt.ylabel('R2')
-    plt.legend()
-        # LR曲线
-    plt.subplot(3, 2, 5)
-    plt.plot(lrs, label='LR')
-    plt.title('LR Score')
-    plt.xlabel('Epoch')
-    plt.ylabel('LR')
-    plt.legend()
-    
-    plt.tight_layout()
-    plt.savefig(save_path)
-    # plt.show()
+def calculate_metrics(y_true, y_pred):
+    rmse = np.sqrt(metrics.mean_squared_error(y_true, y_pred))
+    mae = metrics.mean_absolute_error(y_true, y_pred)
+    r2 = metrics.r2_score(y_true, y_pred)
+    return rmse, mae, r2
+def train_one_epoch(model, data_loader, criterion, optimizer, scheduler, device, epoch):
+    model.train()
+    train_losses = []
 
+    for batch_idx, data_input in enumerate(data_loader):
+        # 可选：首个 batch 输出 shape，便于调试
+        if epoch == 1 and batch_idx == 0:
+            for i, data in enumerate(data_input):
+                print(f"Input {i} shape: {data.shape}")
+
+        x_input, y_input = process_input(data_input, device)
+        y_pred = model(*x_input)
+        y_input = y_input.float()
+        y_pred = y_pred.float()
+        loss = criterion(y_pred, y_input)
+
+        optimizer.zero_grad()
+        loss.backward()
+
+        # 可选：调试梯度用
+        # visualize_gradients(model)
+        # for name, param in model.named_parameters():
+        #     if param.requires_grad and param.grad is not None:
+        #         print(f"{name}: grad norm = {param.grad.norm().item():.4f}")
+
+        optimizer.step()
+        scheduler.step()
+        train_losses.append(loss.item())
+
+    return train_losses
+def update_history(history, phase, loss, rmse, mae, r2):
+    history[phase]['loss'].append(loss)
+    history[phase]['rmse'].append(rmse)
+    history[phase]['mae'].append(mae)
+    history[phase]['r2'].append(r2)
+def set_random_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    np.random.seed(seed)
+
+def evaluate_model(model, data_loader, criterion, device):
+    model.eval()
+    y_true, y_pred_all = [], []
+
+    with torch.no_grad():
+        for data_input in data_loader:
+            x_input, y_input = process_input(data_input, device)
+            y_output = model(*x_input)
+
+            y_pred_all.extend(y_output.data.cpu().numpy())
+            y_true.extend(y_input.data.cpu().numpy())
+
+    # 全部转成 Tensor 后计算 loss（比 batch 求 loss 后再平均更准确）
+    y_pred_all_tensor = torch.tensor(y_pred_all, dtype=torch.float32)
+    y_true_tensor = torch.tensor(y_true, dtype=torch.float32)
+    loss = criterion(y_pred_all_tensor, y_true_tensor).item()
+
+    return y_true, y_pred_all, loss
 def train_model(model, train_loader, test_loader):
-    torch.cuda.empty_cache()
-    torch.manual_seed(cfg.rand_seed)
-    torch.cuda.manual_seed(cfg.rand_seed)
-    np.random.seed(cfg.rand_seed)
-    model = model.to(cfg.device)
+    device = cfg.device
+    set_random_seed(cfg.rand_seed)
+    model = model.to(device)
     model.apply(init_weights)
 
-    optimizer = optim.AdamW(model.parameters(), lr=cfg.lr)
-    # scheduler = CosineAnnealingLR(optimizer, T_max=cfg.epochs, eta_min=cfg.lr_min)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer, 
-    mode='min',     # 监控验证损失的最小值 ‌:ml-citation{ref="2,8" data="citationList"}
-    factor=0.1,     # 学习率衰减因子（每次降低为当前值的50%）‌:ml-citation{ref="2,6" data="citationList"}
-    patience=5,     # 容忍连续5轮验证损失未改善 ‌:ml-citation{ref="2,8" data="citationList"}
-    verbose=True    # 打印学习率更新日志 ‌:ml-citation{ref="8" data="citationList"}
-)
-    best_rmse, best_mae, best_r2 = np.inf, np.inf, -np.inf
-    best_epoch = 1
+    optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=1e-4)
+    scheduler = CosineAnnealingLR(optimizer, T_max=cfg.epochs)
+    criterion = nn.MSELoss()
 
-    # 初始化存储训练和评估指标的列表
-    train_losses = []
-    eval_losses = []
-    train_rmses = []
-    eval_rmses = []
-    train_maes = []
-    eval_maes = []
-    train_r2s = []
-    eval_r2s = []
-    lrs = []
+    best_metrics = {
+        'rmse': np.inf,
+        'mae': np.inf,
+        'r2': -np.inf,
+        'epoch': 1
+    }
+
+    history = {'train': {'loss': [], 'rmse': [], 'mae': [], 'r2': []},
+               'eval': {'loss': [], 'rmse': [], 'mae': [], 'r2': []},
+               'lr': []}
 
     for epoch in range(1, cfg.epochs + 1):
-        # print('epoch: {}'.format(epoch))
-        model.train()
-        loss_list_train = []
-        running_loss = 0.0
-        for batch_idx, data_input in enumerate(train_loader):
-            if epoch == 1 and batch_idx == 0:
-                print('input_data_shape:')
-                for data in data_input:
-                    print( data.shape) # data & label
-                print()
-                print("len of data input: ",len(data_input) )
-            if len(data_input) >= 3:
-                x_input_cnn = data_input[0]
-                x_input_lstm = data_input[1]
-                y_input = data_input[2]
-                if cfg.device == 'cuda':
-                    x_input_cnn = x_input_cnn.cuda()
-                    x_input_lstm = x_input_lstm.cuda()
-                    y_input = y_input.cuda()
-            else:
-                x_input = data_input[0]
-                y_input = data_input[1]
+        # 训练阶段
+        train_losses = train_one_epoch(model, train_loader, criterion, optimizer, scheduler, device, epoch)
+        train_y_true, train_y_pred, train_loss = evaluate_model(model, train_loader, criterion, device)
+        train_rmse, train_mae, train_r2 = calculate_metrics(train_y_true, train_y_pred)
 
-                if cfg.device == 'cuda':
-                    x_input = x_input.cuda()
-                    y_input = y_input.cuda()
-            # global_step = batch_idx + (epoch - 1) * int(len(train_loader.dataset) / len(inputs)) + 1
+        # 保存训练 history
+        update_history(history, 'train', train_loss, train_rmse, train_mae, train_r2)
+        history['lr'].append(optimizer.param_groups[0]['lr'])
 
-            if len(data_input) >= 3:
-                x_input_cnn = x_input_cnn.to(cfg.device)
-                x_input_lstm = x_input_lstm.to(cfg.device)
-                y_pred = model(x_input_cnn, x_input_lstm)
-            else:
-                x_input = x_input.to(cfg.device)
-                y_pred = model(x_input)
-            y_input = y_input.float()
-            y_pred = y_pred.float()
-            loss = F.smooth_l1_loss(y_input, y_pred)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            loss_val = loss.cpu().data.numpy()
-            loss_list_train.append(loss_val)
-        loss_mean = np.mean(loss_list_train)
-        train_losses.append(loss_mean)
-        print("loss mean: per epoch: ", loss_mean)
-        if epoch % cfg.eval_interval != 0:
+        # 如果不是 eval interval，则跳过评估
+        if epoch % cfg.eval_interval != 0 and epoch != cfg.epochs:
             continue
-        print('epoch: {}'.format(epoch))
 
-        model.eval()
-        y_input_list = []
-        y_pred_list = []
-        loss_list_eval = []
-        for batch_idx, data_input in enumerate(train_loader):
-            if len(data_input) >= 3:
-                x_input_cnn = data_input[0]
-                x_input_lstm = data_input[1]
-                y_input = data_input[2]
-                if cfg.device == 'cuda':
-                    x_input_cnn = x_input_cnn.cuda()
-                    x_input_lstm = x_input_lstm.cuda()
-                    y_input = y_input.cuda()
-            else:
-                x_input = data_input[0]
-                y_input = data_input[1]
-                if cfg.device == 'cuda':
-                    x_input = x_input.cuda()
-                    y_input = y_input.cuda()
-            if len(data_input) >= 3:
-                x_input_cnn = x_input_cnn.to(cfg.device)
-                x_input_lstm = x_input_lstm.to(cfg.device)
-                y_pred = model(x_input_cnn, x_input_lstm)
-            else:
-                x_input = x_input.to(cfg.device)
-                y_pred = model(x_input)
-            
-            # 假设 y_input 和 y_pred 是 PyTorch 的 Tensor
-            if torch.isnan(y_pred).any() or torch.isnan(y_input).any():
-                print("y_pred: ", y_pred)
-                print("Warning: NaN values found in the tensor.")
-            loss = F.smooth_l1_loss(y_input, y_pred)
+        # 测试阶段
+        test_y_true, test_y_pred, test_loss = evaluate_model(model, test_loader, criterion, device)
+        test_rmse, test_mae, test_r2 = calculate_metrics(test_y_true, test_y_pred)
+        update_history(history, 'eval', test_loss, test_rmse, test_mae, test_r2)
 
-            loss_val = loss.cpu().data.numpy()
-            running_loss += loss_val
-            loss_list_eval.append(loss_val)
-            y_pred_list.extend(y_pred.data.cpu().numpy())
-            y_input_list.extend(y_input.data.cpu().numpy())
-        avg_train_loss = running_loss / len(train_loader)
-        val_loss = avg_train_loss  # 这里简化为训练集损失，实际应用时可以用验证集
-        scheduler.step(val_loss)  # 更新学习率
-        print(f"Epoch {epoch+1}: Learning Rate is {optimizer.param_groups[0]['lr']:.6f}")
-        lrs.append(optimizer.param_groups[0]['lr'])
-        loss_mean = np.mean(loss_list_eval)
-        eval_losses.append(loss_mean)
-        train_rmse = np.sqrt(metrics.mean_squared_error(y_input_list, y_pred_list))
-        train_mae = metrics.mean_absolute_error(y_input_list, y_pred_list)
-        train_r2 = metrics.r2_score(y_input_list, y_pred_list)
-        train_rmses.append(train_rmse)
-        train_maes.append(train_mae)
-        train_r2s.append(train_r2)
-        print('Train_RMSE = {:.3f}  Train_MAE = {:.3f}  Train_R2 = {:.3f}'.format(train_rmse, train_mae, train_r2))
+        # 记录最优模型
+        if test_rmse < best_metrics['rmse']:
+            best_metrics.update({'rmse': test_rmse, 'mae': test_mae, 'r2': test_r2, 'epoch': epoch})
+            torch.save(model.state_dict(), cfg.best_model_path)
+            print(f"Best model saved at Epoch {epoch} (Test RMSE: {test_rmse:.4f})")
 
+        # 日志打印
+        print(f"Epoch: {epoch} | LR: {optimizer.param_groups[0]['lr']:.3f} | Train Loss: {train_loss:.2f}")
+        print(f"       Train: RMSE={train_rmse:.3f}  MAE={train_mae:.3f}  R²={train_r2:.3f}")
+        print(f"        Test: RMSE={test_rmse:.3f}  MAE={test_mae:.3f}  R²={test_r2:.3f}\n")
 
-
-        y_input_list = []
-        y_pred_list = []
-        for batch_idx, data_input in enumerate(test_loader):
-            if len(data_input) >= 3:
-                x_input_cnn = data_input[0]
-                x_input_lstm = data_input[1]
-                y_input = data_input[2]
-                if cfg.device == 'cuda':
-                    x_input_cnn = x_input_cnn.cuda()
-                    x_input_lstm = x_input_lstm.cuda()
-                    y_input = y_input.cuda()
-            else:
-                x_input = data_input[0]
-                y_input = data_input[1]
-                if cfg.device == 'cuda':
-                    x_input = x_input.cuda()
-                    y_input = y_input.cuda()
-            if len(data_input) >= 3:
-                x_input_cnn = x_input_cnn.to(cfg.device)
-                x_input_lstm = x_input_lstm.to(cfg.device)
-                y_pred = model(x_input_cnn, x_input_lstm)
-            else:
-                x_input = x_input.to(cfg.device)
-                y_pred = model(x_input)
-            y_pred_list.extend(y_pred.data.cpu().numpy())
-            y_input_list.extend(y_input.data.cpu().numpy())
-            print("预测结果：", y_pred_list[:5])
-        eval_rmse = np.sqrt(metrics.mean_squared_error(y_input_list, y_pred_list))
-        eval_mae = metrics.mean_absolute_error(y_input_list, y_pred_list)
-        eval_r2 = metrics.r2_score(y_input_list, y_pred_list)
-        eval_rmses.append(eval_rmse)
-        eval_maes.append(eval_mae)
-        eval_r2s.append(eval_r2)
-
-        torch.save(model.state_dict(), cfg.model_save_pth)
-        print('Test_RMSE  = {:.3f}  Test_MAE  = {:.3f}  Test_R2  = {:.3f}'.format(eval_rmse, eval_mae, eval_r2))
-        print()
-    return train_losses, eval_losses, train_rmses, eval_rmses, train_maes, eval_maes, train_r2s, eval_r2s, lrs
-
-
+    return history, best_metrics
 
 def main():
     # Basic setting
