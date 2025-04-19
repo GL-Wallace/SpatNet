@@ -67,8 +67,8 @@ def k_folds_valid(sample_num=582, k=5):
 
 
 def s2_gee_samples():
-    df = pd.read_csv('/mnt/e/Papers/SpatNet/data/yy_s2_3yr_12m.csv')
-    formated_csv_save_path = '/mnt/e/PythonPractice/SpatNet/data/yy_s2_3yr_12m.csv'
+    df = pd.read_csv('/mnt/e/Papers/SpatNet/data/yy_s2_3yr_12m_org.csv')
+    formated_csv_save_path = '/mnt/e/Papers/SpatNet/data/yy_s2_3yr_12m.csv'
     unique_ids = df['IDID'].drop_duplicates()
     print('Number of Unique Ids: ', len(unique_ids))
 
@@ -159,7 +159,7 @@ def s2_gee_samples():
         months = sorted(som_dict[unique_id][som][year].keys())
         for month in months:
             for band in band_columns:
-                column_name = f"{year}-{month}-{band}"
+                column_name = f"{band}_{year}{month}"
                 i=i+1
                 headers.append(column_name)
 
@@ -183,7 +183,7 @@ def spatial_properities():
     print(df.head())
     data = df.to_numpy()
 
-    reshaped_data = data.reshape(582, 14, 1)
+    reshaped_data = data.reshape(582, 17, 1)
 
     print(reshaped_data.shape)
     output_name = f'spa_data.pkl'
@@ -197,6 +197,6 @@ def spatial_properities():
 
 if __name__ == '__main__':
     # k_folds_valid(sample_num=582, k=5)
-    # s2_gee_samples()
-    spatial_properities()
+    s2_gee_samples()
+    # spatial_properities()
     

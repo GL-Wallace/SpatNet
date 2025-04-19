@@ -13,29 +13,32 @@ import os
 device = 'cuda'  # 'cpu' or 'cuda'
 rand_seed = 188
 
-# ['SpaNet', 'TempoNet', 'SpatNet',]
-model_name = 'SpatNet'  
+# ['SpaNet', 'TempoNet', 'SpatNet', 'MTNet']
+model_name = 'TempoNet'  
+
+# hyper-parameter of SPATNet
+dropout_rate = 0.25
 
 # hyper-parameter of SpaNet
 num_channels = 1
+
 
 # hyper-parameter of TempoNet
 tempo_input_size = 70          # feature_size of time series
 tempo_hidden_size = 64         # hidden size and layers do not need to be large
 tempo_num_layers = 2
-tempo_dropout = 0.2
 
 # hyper-parameter of Cross Attender
-num_heads = 4
+num_heads = 8
 hidden_dim =128
 
 
 # hyper-parameter for training
-lr = 0.1
+lr = 1e-3
 lr_min = 0.00001 
 
-batch_size = 32
-epochs = 100    # need to consider early stopping to avoid overfitting
+batch_size = 64
+epochs = 300  # need to consider early stopping to avoid overfitting
 eval_interval = 1
 
 data_dir = './data/'
@@ -49,5 +52,5 @@ train_test_id = 1
 f_train_index = os.path.join(data_dir, 'train_test_idx', 'train_{}.pkl'.format(train_test_id))  # the pickle file of the sample id list for the training set
 f_test_index = os.path.join(data_dir, 'train_test_idx', 'test_{}.pkl'.format(train_test_id))    # the pickle file of the sample id list for the testing set
 
-model_save_pth = './log/{}_{}.pth'.format(model_name, train_test_id)  # the save path of the model parameters
+best_model_path = './log/{}_{}.pth'.format(model_name, train_test_id)  # the save path of the model parameters
 

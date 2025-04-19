@@ -5,16 +5,15 @@
 # This source code is licensed under the MIT License found in the LICENSE file
 # in the root directory of this source tree.
 # -----------------------------------------------------------------------------
-
 import math
 import torch
-from torch import nn
+from torch import nn, Tensor
 from typing import Optional
 import torch.nn.functional as F
 
-class crossAttender(nn.Module):
+class CrossAttender(nn.Module):
     def __init__(self, embed_dim, num_heads, nums_key_value_head, dropout=0.0):
-        super(crossAttender, self).__init__()
+        super().__init__()
         assert embed_dim % num_heads == 0, "Embedding dimension must be divisible by number of heads"
         assert num_heads % nums_key_value_head == 0, "nums_key_value_head must be devided by number of heads"
         self.embed_dim = embed_dim
@@ -22,7 +21,6 @@ class crossAttender(nn.Module):
         self.nums_key_value_head = num_heads // 2
         self.head_dim = embed_dim // num_heads
         self.ln = torch.nn.LayerNorm(embed_dim)
-        print(f"embed_dim:{embed_dim}, num_heads: {self.num_heads}, out: {self.num_heads * self.head_dim}")
         self.q_proj = nn.Linear(embed_dim, self.num_heads * self.head_dim)
         self.k_proj = nn.Linear(embed_dim, nums_key_value_head * self.head_dim)
         self.v_proj = nn.Linear(embed_dim, nums_key_value_head * self.head_dim)
@@ -92,4 +90,3 @@ class crossAttender(nn.Module):
 
         output = self.proj_drop(self.proj(qv))
         return output
-

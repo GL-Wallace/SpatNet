@@ -12,7 +12,21 @@ import os.path
 import torch.utils.data
 import utils
 import torchvision.transforms as transforms
+from sklearn.preprocessing import StandardScaler
 
+class Standardize(object):
+    def __init__(self):
+        self.scaler_spa = StandardScaler()
+        self.scaler_tempo = StandardScaler()
+
+    def fit(self, x_spa, x_tempo):
+        # Fit the scaler to data
+        self.scaler_spa.fit(x_spa)
+        self.scaler_tempo.fit(x_tempo)
+
+    def transform(self, x_spa, x_tempo):
+        # Apply the scaler to transform the data
+        return self.scaler_spa.transform(x_spa), self.scaler_tempo.transform(x_tempo)
 
 def default_image_loader(path):
     return utils.load_pickle(path)
