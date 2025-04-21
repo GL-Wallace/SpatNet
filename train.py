@@ -22,6 +22,7 @@ from models.spat_net import SpatNet
 import config as cfg
 from utils import utils 
 from utils import data_helper
+from visualization.viz_history import plot_training_history, visualize_attention
 
 
 def get_data_loader(x_data, y_data, train_idx, test_idx):
@@ -43,7 +44,7 @@ def get_model_and_dataloader(x_spa, x_tempo, y, train_idx, test_idx):
         model = SpaNet(in_channels=cfg.num_channels)
         train_loader, test_loader = get_data_loader(x_data=x_spa, y_data=y, train_idx=train_idx, test_idx=test_idx)
     elif cfg.model_name == 'TempoNet':
-        model = TempoNet(input_size=cfg.tempo_input_size, hidden_size=cfg.tempo_hidden_size, num_layers=cfg.tempo_num_layers, dropout=cfg.tempo_dropout)
+        model = TempoNet(input_size=cfg.tempo_input_size, hidden_size=cfg.tempo_hidden_size, num_layers=cfg.tempo_num_layers, dropout=cfg.dropout_rate)
         train_loader, test_loader = get_data_loader(x_data=x_tempo, y_data=y, train_idx=train_idx, test_idx=test_idx)
     elif cfg.model_name == 'SpatNet':
         model = SpatNet(input_dim_spa = cfg.num_channels, input_dim_tempo=cfg.tempo_input_size, hidden_dim=cfg.hidden_dim, output_dim=1, num_heads=cfg.num_heads)
@@ -83,28 +84,21 @@ def train_one_epoch(model, data_loader, criterion, optimizer, scheduler, device,
     train_losses = []
 
     for batch_idx, data_input in enumerate(data_loader):
-        # 可选：首个 batch 输出 shape，便于调试
         if epoch == 1 and batch_idx == 0:
             for i, data in enumerate(data_input):
                 print(f"Input {i} shape: {data.shape}")
 
-        x_input, y_input = process_input(data_input, device)
-        y_pred = model(*x_input)
+        x_input, y_input = process_input(data_input)
+        y_pred, attn_weight = model(*x_input)
         y_input = y_input.float()
         y_pred = y_pred.float()
         loss = criterion(y_pred, y_input)
 
         optimizer.zero_grad()
         loss.backward()
-
-        # 可选：调试梯度用
-        # visualize_gradients(model)
-        # for name, param in model.named_parameters():
-        #     if param.requires_grad and param.grad is not None:
-        #         print(f"{name}: grad norm = {param.grad.norm().item():.4f}")
-
         optimizer.step()
-        scheduler.step()
+        # scheduler.step()
+        # visualize_attention(attn_weight)
         train_losses.append(loss.item())
 
     return train_losses
@@ -124,13 +118,12 @@ def evaluate_model(model, data_loader, criterion, device):
 
     with torch.no_grad():
         for data_input in data_loader:
-            x_input, y_input = process_input(data_input, device)
-            y_output = model(*x_input)
+            x_input, y_input = process_input(data_input)
+            y_output,_ = model(*x_input)
 
             y_pred_all.extend(y_output.data.cpu().numpy())
             y_true.extend(y_input.data.cpu().numpy())
 
-    # 全部转成 Tensor 后计算 loss（比 batch 求 loss 后再平均更准确）
     y_pred_all_tensor = torch.tensor(y_pred_all, dtype=torch.float32)
     y_true_tensor = torch.tensor(y_true, dtype=torch.float32)
     loss = criterion(y_pred_all_tensor, y_true_tensor).item()
@@ -158,31 +151,25 @@ def train_model(model, train_loader, test_loader):
                'lr': []}
 
     for epoch in range(1, cfg.epochs + 1):
-        # 训练阶段
         train_losses = train_one_epoch(model, train_loader, criterion, optimizer, scheduler, device, epoch)
         train_y_true, train_y_pred, train_loss = evaluate_model(model, train_loader, criterion, device)
         train_rmse, train_mae, train_r2 = calculate_metrics(train_y_true, train_y_pred)
 
-        # 保存训练 history
         update_history(history, 'train', train_loss, train_rmse, train_mae, train_r2)
         history['lr'].append(optimizer.param_groups[0]['lr'])
 
-        # 如果不是 eval interval，则跳过评估
         if epoch % cfg.eval_interval != 0 and epoch != cfg.epochs:
             continue
 
-        # 测试阶段
         test_y_true, test_y_pred, test_loss = evaluate_model(model, test_loader, criterion, device)
         test_rmse, test_mae, test_r2 = calculate_metrics(test_y_true, test_y_pred)
         update_history(history, 'eval', test_loss, test_rmse, test_mae, test_r2)
 
-        # 记录最优模型
         if test_rmse < best_metrics['rmse']:
             best_metrics.update({'rmse': test_rmse, 'mae': test_mae, 'r2': test_r2, 'epoch': epoch})
             torch.save(model.state_dict(), cfg.best_model_path)
             print(f"Best model saved at Epoch {epoch} (Test RMSE: {test_rmse:.4f})")
 
-        # 日志打印
         print(f"Epoch: {epoch} | LR: {optimizer.param_groups[0]['lr']:.3f} | Train Loss: {train_loss:.2f}")
         print(f"       Train: RMSE={train_rmse:.3f}  MAE={train_mae:.3f}  R²={train_r2:.3f}")
         print(f"        Test: RMSE={test_rmse:.3f}  MAE={test_mae:.3f}  R²={test_r2:.3f}\n")
@@ -211,8 +198,7 @@ def main():
     # Train the model
     input('Press enter to start training...\n')
     print('START TRAINING\n')
-    train_losses, eval_losses, train_rmses, eval_rmses, train_maes, eval_maes, train_r2s, eval_r2s, lrs = train_model(model, train_loader, test_loader)
-    plot_training_metrics(train_losses, eval_losses, train_rmses, eval_rmses, train_maes, eval_maes, train_r2s, eval_r2s, lrs)
-
-if __name__ == '__main__':
+    history, best_metrics = train_model(model, train_loader, test_loader)
+    plot_training_history(history, save_path="output/history_plot.png")
+if __name__ == '__main__':  
     main()

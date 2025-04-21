@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import torch
+import numpy as np
 
 def plot_training_history(history, save_path=None, dark=False):
     
@@ -61,3 +63,76 @@ def plot_training_history(history, save_path=None, dark=False):
         print(f"📊 Plot saved to {save_path}")
     else:
         plt.show()
+
+
+def visualize_attention(
+    attn_weight,
+    sample_indices=[0,1,2],
+    save_path=None
+    ):
+    attn_weight = attn_weight.detach().cpu()  # shape: [B, seq, seq]
+    B, seq_len, _ = attn_weight.shape
+    num_samples = len(sample_indices)
+
+    # 创建每个样本两个子图（nrows=2 * sample）
+    fig, axes = plt.subplots(
+        nrows=2 ,
+        ncols=1 * num_samples,
+        figsize=(3 * num_samples, 5 )
+    )
+
+    if num_samples == 1:
+        axes = [axes]  # 保证 axes 是 list
+
+    time_steps = [f"T-2", f"T-1", "T"] 
+    for idx, sample_idx in enumerate(sample_indices):
+        attn_matrix = attn_weight[sample_idx]  # [seq, seq]
+
+        # --- 上图：每行 softmax（每个 Query 时间步的分布）
+        row_softmax = torch.softmax(attn_matrix, dim=-1).numpy()
+        ax_heatmap = axes[0, idx]
+        sns.heatmap(
+            row_softmax,
+            cmap="Blues",
+            square=True,
+            # annot=False,
+            xticklabels=time_steps,
+            yticklabels=time_steps,
+            ax=ax_heatmap
+        )
+        ax_heatmap.set_title(f"[Sample {sample_idx+1}]", fontsize=14)
+        ax_heatmap.set_xlabel("Time Step", fontsize=14)
+        ax_heatmap.set_ylabel("Time Step", fontsize=14)
+
+        # --- 
+        row_softmax = torch.softmax(attn_matrix, dim=1).numpy()
+        avg_contribution = row_softmax.mean(axis=0)
+        ax_bar = axes[1, idx]
+        x = np.arange(1,len(time_steps)+1, 1)
+        ax_bar.bar(
+            x = x,
+            height=avg_contribution,
+            color=sns.color_palette("Blues")[3],
+            edgecolor="white",
+            width=0.5,
+            align='center', 
+        )
+        ax_bar.set_ylim(0, 1)  
+        ax_bar.set_title(f"[Sample {sample_idx+1}]", fontsize=14)
+        ax_bar.set_xlabel("Time Step",fontsize=14)
+        ax_bar.set_ylabel("Weight Sum",fontsize=14)
+
+        ax_bar.set_xticklabels(time_steps)
+        ax_bar.set_xticks(x)
+
+        for tick in ax_bar.get_xticklabels() + ax_bar.get_yticklabels():
+            tick.set_fontsize(12)  
+    fig.suptitle("Attention Visualization per Sample", fontsize=24, y=0.99)
+    plt.tight_layout()
+
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path)
+        print(f"✅ Attention 图已保存至: {save_path}")
+
+    plt.show()

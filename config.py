@@ -11,8 +11,8 @@ import os
 
 # model hyper-parameters
 device = 'cuda'  # 'cpu' or 'cuda'
-rand_seed = 188
-
+rand_seed = 51
+3
 # ['SpaNet', 'TempoNet', 'SpatNet', 'MTNet']
 model_name = 'TempoNet'  
 
@@ -32,13 +32,12 @@ tempo_num_layers = 2
 num_heads = 8
 hidden_dim =128
 
-
 # hyper-parameter for training
 lr = 1e-3
 lr_min = 0.00001 
 
 batch_size = 64
-epochs = 300  # need to consider early stopping to avoid overfitting
+epochs = 200  # need to consider early stopping to avoid overfitting
 eval_interval = 1
 
 data_dir = './data/'
