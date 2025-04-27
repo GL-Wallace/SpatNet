@@ -19,6 +19,7 @@ from sklearn import metrics
 from models.tempo_net import TempoNet
 from models.spa_net import SpaNet
 from models.spat_net import SpatNet
+from models.mt_net import MTNet
 import config as cfg
 from utils import utils 
 from utils import data_helper
@@ -49,6 +50,9 @@ def get_model_and_dataloader(x_spa, x_tempo, y, train_idx, test_idx):
     elif cfg.model_name == 'SpatNet':
         model = SpatNet(input_dim_spa = cfg.num_channels, input_dim_tempo=cfg.tempo_input_size, hidden_dim=cfg.hidden_dim, output_dim=1, num_heads=cfg.num_heads)
         train_loader, test_loader = get_data_loader_spat(x_data_spa=x_spa,x_data_tempo=x_tempo, y_data=y, train_idx=train_idx, test_idx=test_idx)
+    elif cfg.model_name == 'MTNET':
+        model = MTNet(in_channels = cfg.num_channels, input_dim_tempo=cfg.tempo_input_size, hidden_dim=cfg.tempo_hidden_size, num_layers=cfg.tempo_num_layers, num_heads=cfg.num_heads, dropout=cfg.dropout_rate)
+        train_loader, test_loader = get_data_loader_spat(x_data_spa=x_spa,x_data_tempo=x_tempo, y_data=y, train_idx=train_idx, test_idx=test_idx)
     else:
         print('Model name is not valid.')
         sys.exit(0)
@@ -70,7 +74,7 @@ def init_weights(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
-    elif isinstance(m, nn.Conv1d):
+    elif isinstance(m, nn.Conv2d):
         torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
 
@@ -89,7 +93,8 @@ def train_one_epoch(model, data_loader, criterion, optimizer, scheduler, device,
                 print(f"Input {i} shape: {data.shape}")
 
         x_input, y_input = process_input(data_input)
-        y_pred, attn_weight = model(*x_input)
+        # y_pred, attn_weight = model(*x_input)
+        y_pred = model(*x_input)
         y_input = y_input.float()
         y_pred = y_pred.float()
         loss = criterion(y_pred, y_input)
@@ -97,7 +102,8 @@ def train_one_epoch(model, data_loader, criterion, optimizer, scheduler, device,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        # scheduler.step()
+        if scheduler is not None:
+            scheduler.step()
         # visualize_attention(attn_weight)
         train_losses.append(loss.item())
 
@@ -119,8 +125,8 @@ def evaluate_model(model, data_loader, criterion, device):
     with torch.no_grad():
         for data_input in data_loader:
             x_input, y_input = process_input(data_input)
-            y_output,_ = model(*x_input)
-
+            # y_output,_ = model(*x_input)
+            y_output = model(*x_input)
             y_pred_all.extend(y_output.data.cpu().numpy())
             y_true.extend(y_input.data.cpu().numpy())
 
@@ -137,6 +143,7 @@ def train_model(model, train_loader, test_loader):
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=1e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=cfg.epochs)
+    # scheduler = None
     criterion = nn.MSELoss()
 
     best_metrics = {

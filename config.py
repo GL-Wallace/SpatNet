@@ -12,15 +12,15 @@ import os
 # model hyper-parameters
 device = 'cuda'  # 'cpu' or 'cuda'
 rand_seed = 51
-3
+
 # ['SpaNet', 'TempoNet', 'SpatNet', 'MTNet']
-model_name = 'TempoNet'  
+model_name = 'MTNET'  
 
 # hyper-parameter of SPATNet
 dropout_rate = 0.25
 
 # hyper-parameter of SpaNet
-num_channels = 1
+num_channels = 17
 
 
 # hyper-parameter of TempoNet
@@ -44,10 +44,10 @@ data_dir = './data/'
 log_dir = './log/'
 f_df_samples = os.path.join(data_dir, 'sample_values.csv')   # user need to assign the filename of the sample data (including columns of the target soil property, e.g. soil organic carbon values)
 target_var_name = 'SOM'     # the column name for the target property (y) that needs to be predicted
-f_data_spa = os.path.join(data_dir, 'spa_data.pkl')
+f_data_spa = os.path.join(data_dir, 'spa_windows_data.pkl')
 f_data_tempo = os.path.join(data_dir, 's2_3yr_7m.pkl')               # the pickle file of the input data (X) for LSTM (i.e. phenological data with temporally dynamic information)
 
-train_test_id = 1
+train_test_id = 2
 f_train_index = os.path.join(data_dir, 'train_test_idx', 'train_{}.pkl'.format(train_test_id))  # the pickle file of the sample id list for the training set
 f_test_index = os.path.join(data_dir, 'train_test_idx', 'test_{}.pkl'.format(train_test_id))    # the pickle file of the sample id list for the testing set
 
